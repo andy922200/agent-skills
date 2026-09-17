@@ -33,7 +33,43 @@ description: 這份 skill 在做什麼、什麼情況下該被觸發、什麼情
 
 ## 如何使用
 
-這個 repo 沒有安裝腳本，也不綁定特定工具，因此使用方式是通用的手動複製／連結：
+### 方式一：使用 `install.sh`（推薦）
+
+這個 repo 附帶 `install.sh`，可以把共用 skill 以 symlink 的方式連結進你的專案，同時保留專案自有的 skill 不被覆蓋。連結路徑遵循以下結構：
+
+```
+project/
+├── .agents/
+│   └── skills/
+│       ├── shadcn-vue
+│       │   -> /path/to/agent-skills/shadcn-vue
+│       └── project-specific-skill/
+│
+└── .claude/
+    └── skills/
+        ├── shadcn-vue
+        │   -> ../../.agents/skills/shadcn-vue
+        └── claude-project-specific-skill/
+```
+
+在目標專案的根目錄執行（依 clone 下來的相對路徑調整）：
+
+```bash
+# 連結全部共用 skill
+../agent-skills/install.sh --all
+
+# 只連結指定的 skill（逗號分隔）
+../agent-skills/install.sh --skills shadcn-vue,typescript-standards
+
+# 列出目前可用的共用 skill
+../agent-skills/install.sh --list
+```
+
+若目標路徑已存在同名的專案自有 skill（非 symlink），該 skill 會被保留、不會被覆蓋。
+
+### 方式二：手動複製／連結
+
+也不綁定特定工具，可以用通用的手動複製／連結方式：
 
 1. Clone 這個 repo：
 

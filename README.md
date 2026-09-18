@@ -24,6 +24,7 @@ description: 這份 skill 在做什麼、什麼情況下該被觸發、什麼情
 
 | Skill | 說明 | 語言 |
 | --- | --- | --- |
+| [`browser-web-data-discovery`](./browser-web-data-discovery) | 爬蟲／網頁資料收集時，先以可用瀏覽器能力檢視渲染內容與資料來源，再考慮直接 HTTP 請求 | 中文 |
 | [`git-commit-msg`](./git-commit-msg) | 撰寫／修正 git commit 訊息的規則，採用 Conventional Commits 格式 | 中文 |
 | [`ios-safari-fixed-overlay`](./ios-safari-fixed-overlay) | iOS Safari 上 `position: fixed` 全螢幕遮罩／彈窗底部出現縫隙的除錯指南（WebKit 層級問題，與框架無關） | 中文 |
 | [`release-notes-from-commit`](./release-notes-from-commit) | 根據單一指定的 git commit 產生適合發佈於 GitHub Release 的 release notes | 中文 |

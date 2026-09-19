@@ -43,7 +43,7 @@ project/
 ├── .agents/
 │   └── skills/
 │       ├── shadcn-vue
-│       │   -> /path/to/agent-skills/shadcn-vue
+│       │   -> ../../../agent-skills/shadcn-vue
 │       └── project-specific-skill/
 │
 └── .claude/
@@ -53,7 +53,13 @@ project/
         └── claude-project-specific-skill/
 ```
 
-在目標專案的根目錄執行（依 clone 下來的相對路徑調整）：
+建議讓本 repo 與目標專案位於同一層資料夾，再從目標專案根目錄執行。此時腳本會建立可隨共同父資料夾搬移的相對連結：
+
+```text
+personal/
+├── agent-skills/
+└── your-project/
+```
 
 ```bash
 # 連結全部共用 skill

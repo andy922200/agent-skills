@@ -38,8 +38,19 @@ set -euo pipefail
 # Existing project-specific skills are preserved.
 # ============================================================
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROJECT_DIR="$(pwd)"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
+PROJECT_DIR="$(pwd -P)"
+
+# When the shared-skills repository and target project are siblings, use a
+# relative link. It remains valid if their shared parent directory is moved.
+SCRIPT_PARENT_DIR="$(cd "${SCRIPT_DIR}/.." && pwd -P)"
+PROJECT_PARENT_DIR="$(cd "${PROJECT_DIR}/.." && pwd -P)"
+
+if [[ "$SCRIPT_PARENT_DIR" == "$PROJECT_PARENT_DIR" ]]; then
+  AGENTS_SKILLS_SOURCE_DIR="../../../$(basename "$SCRIPT_DIR")"
+else
+  AGENTS_SKILLS_SOURCE_DIR="$SCRIPT_DIR"
+fi
 
 AGENTS_SKILLS_DIR="${PROJECT_DIR}/.agents/skills"
 CLAUDE_SKILLS_DIR="${PROJECT_DIR}/.claude/skills"
@@ -117,11 +128,12 @@ prepare_directories() {
 # Link one skill into .agents/skills
 #
 # .agents/skills/<skill>
-#   -> /absolute/path/to/agent-skills/<skill>
+#   -> ../../../agent-skills/<skill> (when the repositories are siblings)
+#   -> /absolute/path/to/agent-skills/<skill> (otherwise)
 # ------------------------------------------------------------
 link_agents_skill() {
   local skill="$1"
-  local source="${SCRIPT_DIR}/${skill}"
+  local source="${AGENTS_SKILLS_SOURCE_DIR}/${skill}"
   local target="${AGENTS_SKILLS_DIR}/${skill}"
 
   if [[ -L "$target" ]]; then

@@ -53,6 +53,14 @@ description: >-
 ## Vue 元件
 
 - 元件邏輯維持在 `<script setup lang="ts">`，以 Composition API 組織可重用且具型別的狀態與行為。
+- `<script setup>` 內的宣告依下列順序排列，盡可能不得跳序：
+  1. 純固定常數（例如 `PAGE_SIZE`）。
+  2. `use` 開頭的 Composable／Hook 呼叫（例如 `useI18n`、`useScroll`、自訂 Composable）。
+  3. 呼叫一般函數取得的一次性變數（例如 `const availableMarkets = getAvailableMarketOptions(brands)`）。
+  4. `ref` / `reactive`。
+  5. `computed`。
+  6. `watch`。
+  - 只有在後面宣告「使用前必須先存在」（跳序會導致 used-before-declared 或邏輯上依賴尚未宣告的變數）時，才可以打破以上順序；此時把該行搬到它依賴的宣告之後，並在該行加一行註解說明依賴哪個變數、為何無法照原順序排列。不得因為「這樣分組比較好讀」等主觀理由跳序。
 - 使用介面明確定義 Props 與 Emits；有預設值的 Props 使用 `withDefaults`。
 - 使用 `defineModel` 時，直接以 model 取代重複的 `modelValue` Props、`update:modelValue` Emits 與手動 computed proxy；不要同時建立兩套雙向綁定介面。
 - Template 中所有使用者可見文字，包括按鈕文字、placeholder、空狀態、錯誤訊息與可及性標籤，都必須使用 i18n translation key，不硬編單一語言文字。
@@ -128,6 +136,57 @@ const pageStatus = computed<PageStatus | null>(() => {
 </template>
 ```
 
+**多個各自獨立、可能同時成立的判斷，不要硬套成單一狀態物件**。上面的收斂方式處理的是「同一位置多選一、彼此互斥」的情境；但有些頁面是好幾個各自獨立、彼此不互斥的提示依序疊放（例如：選取太多、選取不足、載入中、載入失敗、幣別不一致、id 無效等，實務上可能同時成立、同時顯示），其中不少條件本身就是複合布林運算式（例如 `!isLoading && !tooMany && selectedIds.length >= 2 && validCount < 2`）。這種情境不能套用「回傳單一物件」的寫法，那樣會把本來可以並存的訊息錯誤地收斂成只能顯示一種。當這類獨立判斷數量偏多（例如 4 個以上）、且含複合布林運算式時，改成收斂成一個 computed，回傳「具型別清單」；清單項目若彼此需要的標記結構不同，用帶區別欄位（例如 `kind`）的聯合型別表達少數幾種結構，template 用單一 `v-for` 印出，只在 `kind` 不同時分幾個分支即可。若某個判斷要蓋掉其餘所有提示（例如發生致命錯誤），在 computed 內提早 `return` 只含該項目的陣列，不要讓「蓋牌」邏輯散落在其餘每個條件裡各自加註。這個收斂一樣只在「同一組判斷邏輯」聚在一起時才做；如果各區塊分散在版面不同位置、彼此沒有共用的顯示邏輯，維持獨立 `v-if` 反而更好讀。
+
+```ts
+// 5 個以上互不互斥的獨立提示，其中部分條件是複合布林運算式。
+type PageBanner =
+  | { key: string; kind: 'text'; role: 'alert' | 'status' | null; tone: string; message: string }
+  | { key: string; kind: 'load-error'; message: string }
+
+const banners = computed<PageBanner[]>(() => {
+  if (missingGuards.length) {
+    // 致命錯誤蓋掉其餘提示，提早回傳只含這一項的陣列。
+    return [
+      { key: 'missing-guards', kind: 'text', role: 'alert', tone: 'text-destructive', message: t('page.missingGuards') },
+    ]
+  }
+
+  const result: PageBanner[] = []
+  if (isLoading.value) {
+    result.push({ key: 'loading', kind: 'text', role: 'status', tone: 'text-muted-foreground', message: t('page.loading') })
+  }
+  if (failedIds.value.length) {
+    result.push({ key: 'load-error', kind: 'load-error', message: t('page.loadError') })
+  }
+  // ...其餘各自獨立的條件同樣 push 進 result，彼此可以同時存在。
+
+  return result
+})
+```
+
+```vue
+<template>
+  <template v-for="banner in banners" :key="banner.key">
+    <p v-if="banner.kind === 'text'" :role="banner.role ?? undefined" :class="banner.tone">
+      {{ banner.message }}
+    </p>
+    <div v-else role="alert">
+      <p>{{ banner.message }}</p>
+      <Button @click="emit('retry')">{{ t('page.retry') }}</Button>
+    </div>
+  </template>
+</template>
+```
+
+## 頁面拆分為子元件
+
+- 頁面若包含多個語意獨立的區塊（例如篩選列的市場、品牌、系列、價格區間、搜尋框、排序選單），應拆成同目錄 `components/` 下對應的單一職責子元件，每個子元件只負責一個區塊的 label、控制項與該區塊專屬互動邏輯（例如篩選重設按鈕），讓頁面元件的 script 與 template 保持精簡可讀。
+- 子元件與頁面間的資料流優先用 `defineModel`（v-model）雙向綁定；不要另外自建 `defineEmits` 事件介面取代 v-model。若某個互動真的無法用 v-model 表達而需要新增 `defineEmits`，**先詢問使用者並取得同意**才可以加。
+- 頁面層級的版面關注（例如手機版「展開／收合篩選條件」共用同一個狀態），用 prop 傳進每個受影響的子元件，讓子元件在自己的根節點套用對應的 class；不需要為此在頁面 template 另外包一層 wrapper div，以維持與拆分前一致的 DOM 結構。
+- 子元件若定義了頁面端也需要用到的型別（例如某個篩選區塊的資料 domain 型別），直接從該子元件檔案 `export` 該 interface，頁面端用 `import type` 取用，不要在頁面與子元件重複定義同一份型別。
+- `v-for` 傳入子元件的清單，若清單項目需要格式化文字（例如以 `t()` 轉換顯示名稱），在頁面的 computed 先組成「欄位已是字串」的 view model 陣列再傳給子元件的 prop；子元件不應該反過來呼叫頁面才有的翻譯／格式化邏輯來組資料。
+
 ## Composable、API 與資料存取
 
 - Composable 檔案命名採 `use` + PascalCase，封裝明確、可測試的功能，並以具型別的物件回傳狀態與操作。
@@ -172,6 +231,7 @@ export const useProfile = (): UseProfileResult => {
 
 ## 共用程式碼的放置位置
 
+- 新增或搬動函式到 `lib/`（或 `composables/`）前，先搜尋該目錄既有檔案是否已有類似或相同用途的函式／模式，而不是直接新增一份平行實作。留意三種訊號：現成的 hook／composable 模式可以直接沿用（例如某段狀態要跟 `localStorage` 同步，先查有沒有現成的 `useStorage` + 自訂 serializer 寫法，而不是手刻 `try/catch` 讀寫）；既有的資料組織方式可以比照（例如一個聯集型別到 i18n key 的對應表，先查同領域檔案有沒有已經用 `Record<X, string>` 表達過同類需求，新增時比照那個寫法而不是自創一套）；同一段邏輯已經在多個頁面各自重複實作，代表它早該收斂成一支共用函式，這時要做的是把所有重複處都改指向同一支，不是再新增第三份。
 - 純函式（不依賴 Vue 響應式、生命週期或 i18n context）放 `src/lib/`，並**依領域命名檔案**（`markets.ts`、`formatters.ts`、`pageUrls.ts`）。不得建立 `helpers.ts`、`common.ts`、`misc.ts` 這類沒有邊界的雜物櫃檔名。
 - 需要 `ref`、`computed`、生命週期或 `useI18n()` 的邏輯放 `src/composables/`。同一件事若同時有純計算與響應式包裝，純計算留在 `lib/`，`composables/` 只負責綁定響應式來源。
 - `src/pages/` 放可直接進入的路由／MPA 頁面：處理網址、`main.ts`、頁面 metadata 與品牌 adapter，不用來收納沒有對應入口的共用功能實作。
@@ -203,6 +263,45 @@ src/
         main.ts
       utils/            # 只有這個頁面用得到
         watchSearch.ts
+```
+
+## 頁面本地 utils/ 的包裝函式寫法
+
+- 頁面／元件內若有函式不是 `computed`、也因為需要 `t()`／`te()` 或元件的 composable state 而搬不進 `lib/`：把邏輯本體（含 JSDoc）搬進該頁 `utils/` 底下依領域命名的檔案，元件內只留一層**同名的薄 wrapper**，負責把當下的 `t`／`te`／locale／composable state 等 reactive context 傳給 utils 函式。**wrapper 本身不加 JSDoc**——文件寫在 utils 裡真正的實作上，那裡才是這個函式實際做什麼的唯一事實來源，wrapper 重複寫一份等於兩處要一起維護。
+- 即使某段邏輯 100% 只有這一個元件在用、看起來沒有「可重用性」，仍值得做這層拆分：**目的不是重用，是把元件 script 裡所有判斷邏輯集中到 utils**，讓元件本身只剩宣告狀態與接線，才容易一眼看完；不要因為「反正沒人共用」就把邏輯留在元件裡。
+- utils 函式的參數直接對應 wrapper 需要提供的 reactive context：i18n 傳 `t`／`te` 函式本身（不是已翻譯字串，因為 utils 函式常常要自己組 key）；composable 的 state 傳 `Ref<T>`；composable 的 action 直接傳函式參照。這樣 utils 函式維持可以脫離 Vue context 直接單元測試，也是把它們抽出來的主要理由。
+- 同一個元件裡這類 wrapper 若有好幾支，集中放在一起，用一對區塊註解（例如 `/* 工具函式包裝 Start */` ／ `/* 工具函式包裝 End */`）夾住，放在所有 `computed` 之後、`watch` 之前；讓人掃過 script 就能分辨「這一段都是薄轉接層，真正邏輯在別處」，不必逐支讀完才知道。
+
+```ts
+// features/<feature>/utils/watchSelectionActions.ts
+/**
+ * 依目前是否已選取切換清單的加入／移除，回傳這次操作對應的公告文字。
+ */
+export const toggleSelection = (
+  id: string,
+  state: { selectedIds: Ref<string[]>; add: (id: string) => boolean; remove: (id: string) => void },
+  labels: { changed: string; full: string },
+): string => {
+  if (state.selectedIds.value.includes(id)) {
+    state.remove(id)
+    return labels.changed
+  }
+  return state.add(id) ? labels.changed : labels.full
+}
+```
+
+```vue
+<script setup lang="ts">
+/* 工具函式包裝 Start */
+const toggleWatch = (id: string): void => {
+  announcement.value = toggleSelection(
+    id,
+    { selectedIds, add, remove },
+    { changed: t('selection.changed'), full: t('selection.full') },
+  )
+}
+/* 工具函式包裝 End */
+</script>
 ```
 
 ## Pinia State Management
@@ -312,6 +411,9 @@ const { login } = authStore
 - 在新建專案時省略 ESLint、Prettier、Unit Test 或 E2E Test 的相依、設定、scripts、可執行範例或驗證。
 - 未經使用者要求就將既有專案的 TestCafe、Cypress、Playwright 或其他測試框架遷移為另一個框架。
 - 未經使用者確認，就在新建專案或既有專案採用多頁靜態 i18n 架構（例如 `vite-plugin-virtual-mpa`）取代預設的單頁式 i18n。
+- 未經使用者同意，在子元件另外新增 `defineEmits` 事件介面，取代原本可用 `defineModel` 表達的雙向綁定。
+- 未搜尋 `lib/`、`composables/` 既有實作，就直接新增功能重複、或與既有模式（例如某段狀態已有 `useStorage` 搭配 serializer 的既有寫法）平行的函式。
+- 元件內的薄 wrapper 函式另外寫一份 JSDoc，與底層 utils 函式的說明重複；文件只該寫在 utils 裡真正的實作上。
 
 ## 完成前檢查
 
@@ -329,6 +431,9 @@ const { login } = authStore
 - [ ] 路由頁面與合適的大型／選用功能已動態載入
 - [ ] 一般樣式為 Tailwind CSS 4、沒有 `@apply`（包括其他 Skill 範本），SCSS 僅用於偽元素
 - [ ] RWD、Dark Mode 與基本可及性需求已檢查
+- [ ] 頁面若含多個語意獨立的區塊，已拆成對應的單一職責子元件；子元件與頁面間的資料流以 `defineModel` 為主，新增 `defineEmits` 前已取得使用者同意
+- [ ] 新增或搬動到 `lib/`／`composables/` 的函式，已先搜尋既有目錄確認沒有可直接沿用、擴充或收斂重複的相同／類似邏輯
+- [ ] 頁面本地、搬不進 `lib/` 的函式，邏輯與 JSDoc 已搬進該頁 `utils/`；元件內只留不含 JSDoc 的薄 wrapper，且同類 wrapper 集中放在一起（例如用區塊註解標示）
 - [ ] 已盤點最終 UI 的可點選控制項：可操作項目 hover 顯示 `cursor-pointer`，靜態或停用項目不顯示手型；此檢查包含其他 Skill、範本或元件庫產生的樣式
 - [ ] Imports 經 `simple-import-sort` 排序，相關 formatter、lint、type check 與 Unit Test 已執行
 - [ ] 新建專案已安裝且設定 ESLint flat config、Prettier（含 Tailwind plugin）、Vitest / Vue Test Utils 與 Playwright

@@ -36,7 +36,7 @@ description: 這份 skill 在做什麼、什麼情況下該被觸發、什麼情
 
 ### 方式一：使用 `install.sh`（推薦）
 
-這個 repo 附帶 `install.sh`，可以把共用 skill 以 symlink 的方式連結進你的專案，同時保留專案自有的 skill 不被覆蓋。連結路徑遵循以下結構：
+這個 repo 附帶 `install.sh`，預設會把共用 skill 以 symlink 的方式連結進你的專案，同時保留專案自有的 skill 不被覆蓋。連結路徑遵循以下結構：
 
 ```
 project/
@@ -68,11 +68,19 @@ personal/
 # 只連結指定的 skill（逗號分隔）
 ../agent-skills/install.sh --skills shadcn-vue,typescript-standards
 
+# 將全部 skill 複製為實體資料夾（不建立 symlink）
+../agent-skills/install.sh --all --copy
+
+# 只複製指定的 skill
+../agent-skills/install.sh --skills shadcn-vue,typescript-standards --copy
+
 # 列出目前可用的共用 skill
 ../agent-skills/install.sh --list
 ```
 
 若目標路徑已存在同名的專案自有 skill（非 symlink），該 skill 會被保留、不會被覆蓋。
+
+使用 `--copy` 時，`.agents/skills/<skill>` 和 `.claude/skills/<skill>` 都會各自建立完整副本，後續不會隨本 repo 的變動而更新。若該 skill 原先是由本腳本建立的 symlink，執行 `--copy` 會將它轉換成實體副本；其他既有的 symlink 或資料夾仍會保留，以避免覆蓋專案內容。
 
 ### 方式二：手動複製／連結
 

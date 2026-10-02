@@ -9,6 +9,7 @@ set -euo pipefail
 #
 # Usage:
 #   ../agent-skills/install.sh --all
+#   ../agent-skills/install.sh --all --copy
 #   ../agent-skills/install.sh --skills shadcn-vue,testing
 #   ../agent-skills/install.sh --list
 #
@@ -27,7 +28,7 @@ set -euo pipefail
 #           │   -> ../../.agents/skills/shadcn-vue
 #           └── claude-project-specific-skill/
 #
-# Shared skill flow:
+# Default shared skill flow:
 #
 #   agent-skills/<skill>
 #           ↑
@@ -35,6 +36,7 @@ set -euo pipefail
 #           ↑
 #   .claude/skills/<skill>
 #
+# With --copy, both skill directories receive independent real copies.
 # Existing project-specific skills are preserved.
 # ============================================================
 
@@ -59,7 +61,9 @@ usage() {
   cat <<'EOF'
 Usage:
   install.sh --all
+  install.sh --all --copy
   install.sh --skills shadcn-vue,testing
+  install.sh --skills shadcn-vue,testing --copy
   install.sh --list
 
 Options:
@@ -72,6 +76,10 @@ Options:
 
       Example:
         --skills shadcn-vue,testing
+
+  --copy
+      Copy skills instead of creating symlinks.
+      The copies in .agents/skills and .claude/skills are independent.
 
   --list
       Show available shared skills.
@@ -207,6 +215,94 @@ link_claude_skill() {
 }
 
 # ------------------------------------------------------------
+# Copy one skill into a target directory.
+#
+# Existing real directories are project-owned and preserved. An
+# existing expected installer symlink is replaced so --copy can
+# migrate an earlier symlink installation to a real directory.
+# ------------------------------------------------------------
+copy_skill() {
+  local skill="$1"
+  local target_dir="$2"
+  local expected_link="$3"
+  local label="$4"
+  local source="${SCRIPT_DIR}/${skill}"
+  local target="${target_dir}/${skill}"
+  local replace_installer_link=false
+  local staging_dir
+
+  if [[ -L "$target" ]]; then
+    local current_target
+    current_target="$(readlink "$target")"
+
+    if [[ "$current_target" == "$expected_link" ]]; then
+      replace_installer_link=true
+    else
+      echo "Conflict: $label/$skill is already a symlink to:"
+      echo "  $current_target"
+      echo "Expected installer link:"
+      echo "  $expected_link"
+      echo
+      echo "Skipping this skill."
+      return 1
+    fi
+  elif [[ -e "$target" ]]; then
+    echo "Preserved: $label/$skill"
+    echo "  Existing project-specific skill was not overwritten."
+    return 1
+  fi
+
+  # Copy to a sibling temporary directory first. This keeps an existing
+  # installer symlink intact if the copy itself fails.
+  if ! staging_dir="$(mktemp -d "${target_dir}/.${skill}.copy.XXXXXX")"; then
+    echo "Error: Could not create a temporary directory for $label/$skill." >&2
+    return 1
+  fi
+
+  # -L makes the installed skill a complete copy even if a future skill
+  # contains symlinked files or directories.
+  if ! cp -RL "$source" "${staging_dir}/${skill}"; then
+    echo "Error: Could not copy $label/$skill." >&2
+    rm -rf "$staging_dir"
+    return 1
+  fi
+
+  if [[ "$replace_installer_link" == true ]]; then
+    # Check again before removing it in case another process changed it
+    # while this skill was being staged.
+    if [[ ! -L "$target" || "$(readlink "$target")" != "$expected_link" ]]; then
+      echo "Conflict: $label/$skill changed while preparing the copy."
+      rm -rf "$staging_dir"
+      return 1
+    fi
+
+    if ! rm "$target"; then
+      echo "Error: Could not replace the installer symlink at $label/$skill." >&2
+      rm -rf "$staging_dir"
+      return 1
+    fi
+  elif [[ -e "$target" || -L "$target" ]]; then
+    echo "Conflict: $label/$skill was created while preparing the copy."
+    rm -rf "$staging_dir"
+    return 1
+  fi
+
+  if ! mv "${staging_dir}/${skill}" "$target"; then
+    echo "Error: Could not install the copied skill at $label/$skill." >&2
+    rm -rf "$staging_dir"
+    return 1
+  fi
+
+  rmdir "$staging_dir" || true
+
+  if [[ "$replace_installer_link" == true ]]; then
+    echo "Copied: $label/$skill (replaced installer symlink)"
+  else
+    echo "Copied: $label/$skill"
+  fi
+}
+
+# ------------------------------------------------------------
 # Install one shared skill.
 # ------------------------------------------------------------
 install_skill() {
@@ -216,6 +312,14 @@ install_skill() {
   if [[ ! -d "$source" || ! -f "$source/SKILL.md" ]]; then
     echo "Skill not found: $skill" >&2
     return 1
+  fi
+
+  if [[ "$install_type" == "copy" ]]; then
+    # Unlike a Claude symlink, a Claude copy never points at an existing
+    # .agents skill. Each target can therefore be handled independently.
+    copy_skill "$skill" "$AGENTS_SKILLS_DIR" "${AGENTS_SKILLS_SOURCE_DIR}/${skill}" ".agents/skills" || true
+    copy_skill "$skill" "$CLAUDE_SKILLS_DIR" "../../.agents/skills/${skill}" ".claude/skills" || true
+    return 0
   fi
 
   # Install into .agents first.
@@ -236,11 +340,23 @@ install_skill() {
 # ------------------------------------------------------------
 mode=""
 selected=""
+install_type="link"
+
+set_mode() {
+  local requested_mode="$1"
+
+  if [[ -n "$mode" ]]; then
+    echo "Error: Use exactly one of --all, --skills, or --list." >&2
+    exit 1
+  fi
+
+  mode="$requested_mode"
+}
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --all)
-      mode="all"
+      set_mode "all"
       shift
       ;;
 
@@ -250,14 +366,19 @@ while [[ $# -gt 0 ]]; do
         exit 1
       fi
 
-      mode="selected"
+      set_mode "selected"
       selected="$2"
       shift 2
       ;;
 
     --list)
-      list_skills
-      exit 0
+      set_mode "list"
+      shift
+      ;;
+
+    --copy)
+      install_type="copy"
+      shift
       ;;
 
     -h|--help)
@@ -277,6 +398,11 @@ done
 if [[ -z "$mode" ]]; then
   usage
   exit 1
+fi
+
+if [[ "$mode" == "list" ]]; then
+  list_skills
+  exit 0
 fi
 
 # ------------------------------------------------------------

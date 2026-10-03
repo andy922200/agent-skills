@@ -68,7 +68,7 @@ personal/
 # 只連結指定的 skill（逗號分隔）
 ../agent-skills/install.sh --skills shadcn-vue,typescript-standards
 
-# 將全部 skill 複製為實體資料夾（不建立 symlink）
+# 將全部 skill 複製到 .agents/skills，.claude/skills 仍連結至同一份內容
 ../agent-skills/install.sh --all --copy
 
 # 只複製指定的 skill
@@ -80,7 +80,7 @@ personal/
 
 若目標路徑已存在同名的專案自有 skill（非 symlink），該 skill 會被保留、不會被覆蓋。
 
-使用 `--copy` 時，`.agents/skills/<skill>` 和 `.claude/skills/<skill>` 都會各自建立完整副本，後續不會隨本 repo 的變動而更新。若該 skill 原先是由本腳本建立的 symlink，執行 `--copy` 會將它轉換成實體副本；其他既有的 symlink 或資料夾仍會保留，以避免覆蓋專案內容。
+使用 `--copy` 時，只會將共用 skill 複製成 `.agents/skills/<skill>` 的實體資料夾；`.claude/skills/<skill>` 仍會連結至 `.agents/skills/<skill>`，因此兩個工具讀取的 `SKILL.md` 維持同一份。若該 skill 原先是由本腳本建立的 symlink，執行 `--copy` 會將 `.agents` 的連結轉換成實體副本；其他既有的 symlink 或資料夾仍會保留，以避免覆蓋專案內容。
 
 ### 方式二：手動複製／連結
 

@@ -36,7 +36,8 @@ set -euo pipefail
 #           ↑
 #   .claude/skills/<skill>
 #
-# With --copy, both skill directories receive independent real copies.
+# With --copy, .agents/skills receives a real copy and .claude/skills still
+# links to that copy so SKILL.md has one canonical source.
 # Existing project-specific skills are preserved.
 # ============================================================
 
@@ -78,8 +79,8 @@ Options:
         --skills shadcn-vue,testing
 
   --copy
-      Copy skills instead of creating symlinks.
-      The copies in .agents/skills and .claude/skills are independent.
+      Copy skills into .agents/skills instead of linking them.
+      .claude/skills continues to link to .agents/skills.
 
   --list
       Show available shared skills.
@@ -315,10 +316,10 @@ install_skill() {
   fi
 
   if [[ "$install_type" == "copy" ]]; then
-    # Unlike a Claude symlink, a Claude copy never points at an existing
-    # .agents skill. Each target can therefore be handled independently.
+    # Keep one canonical copy. Claude must continue to resolve the same
+    # files through .agents/skills so edits cannot diverge between tools.
     copy_skill "$skill" "$AGENTS_SKILLS_DIR" "${AGENTS_SKILLS_SOURCE_DIR}/${skill}" ".agents/skills" || true
-    copy_skill "$skill" "$CLAUDE_SKILLS_DIR" "../../.agents/skills/${skill}" ".claude/skills" || true
+    link_claude_skill "$skill" || true
     return 0
   fi
 

@@ -29,6 +29,7 @@ description: 這份 skill 在做什麼、什麼情況下該被觸發、什麼情
 | [`ios-safari-fixed-overlay`](./ios-safari-fixed-overlay) | iOS Safari 上 `position: fixed` 全螢幕遮罩／彈窗底部出現縫隙的除錯指南（WebKit 層級問題，與框架無關） | 中文 |
 | [`release-notes-from-commit`](./release-notes-from-commit) | 根據單一指定的 git commit 產生適合發佈於 GitHub Release 的 release notes | 中文 |
 | [`shadcn-vue`](./shadcn-vue) | 管理 shadcn-vue 元件與專案：新增、搜尋、除錯、樣式調整、透過 CLI 安裝／更新元件 | 英文 |
+| [`structured-record-maintenance`](./structured-record-maintenance) | 從可信來源維護產品型錄及其他結構化記錄，遵循專案資料契約並保留 evidence | 中文 |
 | [`typescript-standards`](./typescript-standards) | 跨框架的 TypeScript 撰寫標準：型別安全、函式介面、命名慣例 | 中文 |
 | [`vue-typescript-frontend`](./vue-typescript-frontend) | Vue 3 + TypeScript 前端開發完整標準：專案建置、元件、路由、Pinia、i18n、RWD 等（依賴 `typescript-standards`） | 中文 |
 

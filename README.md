@@ -24,6 +24,8 @@ description: 這份 skill 在做什麼、什麼情況下該被觸發、什麼情
 
 | Skill | 說明 | 語言 |
 | --- | --- | --- |
+| [`agent-docs-audit`](./agent-docs-audit) | 設計或稽核專案的代理文件（AGENTS.md、init.sh、progress 等），以實際程式與資料查核文件是否一致 | 中文 |
+| [`agents-md-authoring`](./agents-md-authoring) | 撰寫、精簡、拆分 AGENTS.md 與 guides：每個事實只留一個正本、避免重複內容，並以索引表分段載入 | 中文 |
 | [`browser-web-data-discovery`](./browser-web-data-discovery) | 爬蟲／網頁資料收集時，先以可用瀏覽器能力檢視渲染內容與資料來源，再考慮直接 HTTP 請求 | 中文 |
 | [`git-commit-msg`](./git-commit-msg) | 撰寫／修正 git commit 訊息的規則，採用 Conventional Commits 格式 | 中文 |
 | [`ios-safari-fixed-overlay`](./ios-safari-fixed-overlay) | iOS Safari 上 `position: fixed` 全螢幕遮罩／彈窗底部出現縫隙的除錯指南（WebKit 層級問題，與框架無關） | 中文 |
